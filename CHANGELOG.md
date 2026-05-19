@@ -2,6 +2,20 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-05-19
+
+### Added
+- **Optional two-way cloud sync with Caspian Tools.** Pair the extension to a workspace on caspiantools.com via the new `Caspian Notes: Connect` command — opens the browser, you pick a workspace + (optional) default project, the page dispatches a `vscode://CaspianTools.caspian-notes/pair?session=…` URI back to the extension. Sign-in flow is identical to the shipped Caspian-Taskmaster pattern: Firebase custom token → `signInWithCustomToken` REST → refresh token persisted in `vscode.SecretStorage` (key prefix `caspianNotes.cloud.*`, independent from Taskmaster's prefix so you can sign each extension into a different workspace on the same machine). Once paired, two coordinated 15s loops run: outbound sweeps local notes with `cloudDirty:true` to the cloud `/notes` collection, inbound polls `updatedAt > cursor` for cross-device updates. **No GitHub leg** — notes have no GitHub representation, so `cloudDirty:false` after the Firestore PATCH is the terminal state. Loop-prevention via the standard EXTENSION-SYNC-CONTRACT writer-tag (`extension:<uid>:<sessionPrefix>`); the matching `onNoteWrite` Cloud Function on the web side skips fan-out on extension/github writer tags.
+- **`Caspian Notes: Upload All Notes to Caspian Tools` command.** Bootstrap-style bulk push of every existing local note to the paired workspace, with a default-project picker (or `(none)` to leave notes unattached). Flips `cloudDirty:true` on every active note and triggers an immediate outbound tick.
+- **`Caspian Notes: Assign Note to Project` command** (palette + tree-view item context menu). Pops a quick-pick over the workspace's projects (live-fetched from the cloud via `runQuery` against `/projects` filtered by your `memberUids`), writes `projectId` to the local note, and pushes within 15 s.
+- **Cloud status bar item.** Right side of the status bar shows `$(cloud) Notes synced` / `$(cloud-upload) Notes N pending` / `$(circle-slash) Notes offline`. Click opens a quick-pick of the cloud commands. Auto-shown when the extension activates if you're already signed in.
+- **`.deleted/` tombstone folder** for soft-delete. Deleting a note now moves the file to `${globalStorageUri}/notes/.deleted/<id>.md` and stamps `deleted:true` so the next outbound tick syncs the delete to the cloud. The active folder no longer contains the file; `list()` and `get()` are unchanged (they still don't surface tombstones). Cloud-side `deleted:true` propagates back via the inbound loop using the same tombstone mechanism.
+
+### Changed
+- **Pin/unpin now bumps `updatedAt`.** Required for cloud sync: the inbound poll keys on `updatedAt > cursor`, so a pin-only edit must bump the timestamp or it wouldn't sync until the next non-pin edit. The visible effect is that a freshly-pinned note jumps to the top of the pinned bucket; the unpinned bucket is unaffected because pin sorts ahead of recency.
+- **Note frontmatter gains optional fields**: `localId`, `workspaceId`, `projectId`, `cloudDirty`, `syncedAt`, `updatedBy`, `deleted`, `deletedAt`. Legacy notes still parse fine — `localId` is back-filled from the file's UUID stem on first read so the cloud doc id (`${workspaceId}_${localId}`) is stable from either side.
+- **`update()` accepts `projectId: string | null`** to set or clear the field; `delete()` writes a tombstone via the new flow described above; new internal helpers `getDirtyNotes()` / `upsertFromCloud()` / `markCloudSynced()` / `markAllDirty()` / `getSessionPrefix()` mirror the IssueStore API the sync engine expects.
+
 ## [1.3.5] - 2026-04-25
 
 ### Added

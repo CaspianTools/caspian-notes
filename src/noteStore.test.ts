@@ -118,13 +118,18 @@ describe('NoteStore', () => {
         expect(list.map((n) => n.id)).toEqual([a.id, b.id]);
     });
 
-    it('toggling pinned does NOT bump updatedAt', async () => {
+    it('toggling pinned bumps updatedAt (so cloud sync picks it up)', async () => {
+        // Cloud-sync v1: the inbound poll keys on `updatedAt > cursor`, so
+        // pin-only changes have to bump updatedAt or they wouldn't sync
+        // until the next non-pin edit. Tradeoff: a freshly-pinned note
+        // jumps to the top of the pinned bucket (the unpinned bucket is
+        // unaffected because pin sorts ahead of recency).
         const note = await store.create({ title: 'A', tags: [], body: '' });
         const before = note.updatedAt;
         await new Promise((r) => setTimeout(r, 5));
         const updated = await store.update(note.id, { pinned: true });
         expect(updated?.pinned).toBe(true);
-        expect(updated?.updatedAt).toBe(before);
+        expect(updated?.updatedAt).not.toBe(before);
     });
 
     it('changing body together with pinned bumps updatedAt', async () => {

@@ -5,11 +5,86 @@ import { NotePanel } from './notePanel';
 import { NoteTreeItem, NoteTreeProvider } from './noteTreeProvider';
 import { ActionPresenter, performAction } from './noteActions';
 import { CardAction } from './types';
+import {
+    connectCloud,
+    getActiveWorkspaceId,
+    isCloudSignedIn,
+    signOutCloud,
+} from './cloud/auth';
+import { notifyPairingCallback } from './cloud/pair';
+import {
+    getSyncHandle,
+    getSyncStatus,
+    isSyncRunning,
+    startSyncEngine,
+    stopSyncEngine,
+} from './cloud/sync';
+import { uploadAllToCloud } from './cloud/uploadAll';
+import { assignProjectCommand } from './cloud/assignProject';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = NoteStore.fromContext(context);
     const tree = new NoteTreeProvider(store);
+    const cloudOutput = vscode.window.createOutputChannel('Caspian Notes (Cloud)');
+    context.subscriptions.push(cloudOutput);
     context.subscriptions.push(vscode.window.registerTreeDataProvider('caspianNotesList', tree));
+
+    // Status-bar item showing the cloud-sync state. Click → quick-pick of
+    // cloud commands.
+    const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+    status.command = 'caspianNotes.cloudStatus';
+    context.subscriptions.push(status);
+    function refreshStatus(): void {
+        const s = getSyncStatus();
+        if (!s) {
+            status.text = '$(circle-slash) Notes offline';
+            status.tooltip = 'Notes are local-only. Click to connect.';
+        } else if (s.pendingDirty > 0) {
+            status.text = `$(cloud-upload) Notes ${s.pendingDirty} pending`;
+            status.tooltip = `${s.pendingDirty} notes waiting to sync to Caspian Tools`;
+        } else {
+            status.text = '$(cloud) Notes synced';
+            status.tooltip = 'Notes synced with Caspian Tools';
+        }
+        status.show();
+    }
+    refreshStatus();
+    const statusTimer = setInterval(refreshStatus, 5_000);
+    context.subscriptions.push({ dispose: () => clearInterval(statusTimer) });
+
+    // URI handler for the device-pairing callback. The web page dispatches
+    //   vscode://CaspianTools.caspian-notes/pair?session=...&status=ok
+    // after the user picks a workspace; we forward the session id to
+    // pair.ts which is awaiting it.
+    context.subscriptions.push(
+        vscode.window.registerUriHandler({
+            handleUri(uri) {
+                if (uri.path === '/pair') {
+                    const sessionId = new URLSearchParams(uri.query).get('session');
+                    if (sessionId) {
+                        notifyPairingCallback(sessionId);
+                    }
+                }
+            },
+        }),
+    );
+
+    // Auto-start the sync engine if we're already signed in (the user
+    // paired in a previous session). Don't block activation on the
+    // identity probe — let it resolve in the background.
+    void (async () => {
+        try {
+            if (await isCloudSignedIn(context)) {
+                const wsId = getActiveWorkspaceId(context);
+                if (wsId) {
+                    await startSyncEngine(context, store, cloudOutput, wsId);
+                    refreshStatus();
+                }
+            }
+        } catch (err) {
+            cloudOutput.appendLine(`[cloud-sync] auto-start failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    })();
 
     // Refresh the tree when the grouping setting changes.
     context.subscriptions.push(
@@ -112,6 +187,72 @@ export function activate(context: vscode.ExtensionContext): void {
         ),
         vscode.commands.registerCommand('caspianNotes.exportLibrary', () => exportLibrary(store)),
         vscode.commands.registerCommand('caspianNotes.importLibrary', () => importLibrary(store)),
+
+        // ── Cloud commands ────────────────────────────────────────────────
+        vscode.commands.registerCommand('caspianNotes.connect', async () => {
+            try {
+                const identity = await connectCloud(context);
+                await startSyncEngine(context, store, cloudOutput, identity.workspaceId);
+                refreshStatus();
+                const wsLabel = identity.workspaceName ?? identity.workspaceId;
+                await vscode.window.showInformationMessage(
+                    `Connected Caspian Notes to ${wsLabel}.`,
+                );
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg !== 'Connect cancelled.') {
+                    await vscode.window.showErrorMessage(`Caspian Notes connect failed: ${msg}`);
+                }
+            }
+        }),
+        vscode.commands.registerCommand('caspianNotes.disconnect', async () => {
+            stopSyncEngine(cloudOutput);
+            await signOutCloud(context);
+            refreshStatus();
+            await vscode.window.showInformationMessage('Disconnected from Caspian Tools.');
+        }),
+        vscode.commands.registerCommand('caspianNotes.uploadAll', () =>
+            uploadAllToCloud(context, store, cloudOutput),
+        ),
+        vscode.commands.registerCommand('caspianNotes.syncNow', async () => {
+            const handle = getSyncHandle();
+            if (!handle) {
+                await vscode.window.showWarningMessage(
+                    'Sync engine isn’t running. Connect first (Caspian Notes: Connect).',
+                );
+                return;
+            }
+            await handle.triggerOutbound();
+            refreshStatus();
+        }),
+        vscode.commands.registerCommand('caspianNotes.assignProject', (arg: unknown) =>
+            assignProjectCommand(context, store, cloudOutput, asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.cloudStatus', async () => {
+            const items: vscode.QuickPickItem[] = [];
+            const running = isSyncRunning();
+            if (running) {
+                items.push({ label: '$(sync) Sync now', description: 'Push pending notes immediately' });
+                items.push({ label: '$(cloud-upload) Upload all notes', description: 'One-time bulk upload' });
+                items.push({ label: '$(folder) Assign a note to a project', description: 'Pick from your local notes' });
+                items.push({ label: '$(circle-slash) Disconnect', description: 'Sign out of Caspian Tools' });
+            } else {
+                items.push({ label: '$(cloud) Connect to Caspian Tools', description: 'Pair this extension with caspiantools.com' });
+            }
+            const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Caspian Notes cloud sync' });
+            if (!pick) { return; }
+            if (pick.label.includes('Sync now')) {
+                await vscode.commands.executeCommand('caspianNotes.syncNow');
+            } else if (pick.label.includes('Upload all')) {
+                await vscode.commands.executeCommand('caspianNotes.uploadAll');
+            } else if (pick.label.includes('Assign a note')) {
+                await vscode.commands.executeCommand('caspianNotes.assignProject');
+            } else if (pick.label.includes('Disconnect')) {
+                await vscode.commands.executeCommand('caspianNotes.disconnect');
+            } else if (pick.label.includes('Connect')) {
+                await vscode.commands.executeCommand('caspianNotes.connect');
+            }
+        }),
     );
 }
 

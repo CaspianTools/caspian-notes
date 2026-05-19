@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/Caspian-Explorer/caspian-notes"
   },
-  "version": "1.3.5",
+  "version": "1.4.0",
   "publisher": "CaspianTools",
   "license": "MIT",
   "engines": {
@@ -130,6 +130,31 @@
         "command": "caspianNotes.item.delete",
         "title": "Delete",
         "icon": "$(trash)"
+      },
+      {
+        "command": "caspianNotes.connect",
+        "title": "Caspian Notes: Connect to Caspian Tools"
+      },
+      {
+        "command": "caspianNotes.disconnect",
+        "title": "Caspian Notes: Disconnect from Caspian Tools"
+      },
+      {
+        "command": "caspianNotes.uploadAll",
+        "title": "Caspian Notes: Upload All Notes to Caspian Tools"
+      },
+      {
+        "command": "caspianNotes.syncNow",
+        "title": "Caspian Notes: Sync Now"
+      },
+      {
+        "command": "caspianNotes.assignProject",
+        "title": "Caspian Notes: Assign Note to Project…",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "caspianNotes.cloudStatus",
+        "title": "Caspian Notes: Cloud Status…"
       }
     ],
     "menus": {
@@ -195,6 +220,11 @@
           "command": "caspianNotes.item.delete",
           "when": "view == caspianNotesList && viewItem == caspianNotes.item",
           "group": "2_danger"
+        },
+        {
+          "command": "caspianNotes.assignProject",
+          "when": "view == caspianNotesList && viewItem == caspianNotes.item",
+          "group": "1_actions@7"
         }
       ],
       "commandPalette": [
