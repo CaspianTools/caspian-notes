@@ -2,6 +2,16 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-05-20
+
+### Fixed
+- **Activation no longer fails silently on cloud-setup errors.** v1.4.0 ran the cloud-related setup (status bar item, URI handler, auto-start of the sync engine) *before* the `vscode.commands.registerCommand(...)` block. If any of those threw — and in practice on at least one machine they did, surfacing the cryptic "command 'caspianNotes.open' not found" when the user clicked the tree-view welcome buttons — the whole `activate()` function bailed and no commands ended up registered. The function is now restructured so every command is registered first, and each cloud-specific block (status bar, URI handler, auto-start) is wrapped in its own `try/catch`. Failures inside the cloud blocks are logged to a new `Caspian Notes` output channel + `console.error` and never break activation.
+
+### Added
+- **"Connect to Caspian Tools" link in the tree-view welcome panel.** Below the existing "New note" / "Open full library" links, hidden once paired (the panel switches to a "Synced with Caspian Tools" confirmation line instead).
+- **$(cloud) icon button in the Notes view title toolbar.** Always visible at the top of the Caspian Notes view: pre-pairing it runs `caspianNotes.connect`; post-pairing it runs `caspianNotes.cloudStatus` (the quick-pick of sync actions). Driven off the new `caspianNotes.cloud.signedIn` context key, which is set on activation, after Connect, and after Disconnect.
+- **Activation logging.** Every step of `activate()` writes a line to the new `Caspian Notes` output channel: entry, commands registered, status bar ok / failed, URI handler ok / failed, auto-start sync result. Mirror lines go to `console.log` so you can grep Help → Toggle Developer Tools too.
+
 ## [1.4.0] - 2026-05-19
 
 ### Added

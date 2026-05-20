@@ -23,68 +23,26 @@ import { uploadAllToCloud } from './cloud/uploadAll';
 import { assignProjectCommand } from './cloud/assignProject';
 
 export function activate(context: vscode.ExtensionContext): void {
+    // Defensive activation: register every command BEFORE any cloud-related
+    // setup, so a throw inside the cloud machinery doesn't leave the
+    // extension half-activated with the welcome panel's links resolving to
+    // "command not found" (the symptom we hit in v1.4.0).
+    //
+    // The cloud-specific UI (status bar, URI handler, auto-start sync engine)
+    // is wrapped in isolated try/catch blocks AFTER the command-registration
+    // block. If any of them fails, the user can still hit `Caspian Notes:
+    // Connect` from the command palette and pair manually; the status bar
+    // just won't reflect the state until the next reload.
+
+    const cloudOutput = vscode.window.createOutputChannel('Caspian Notes');
+    context.subscriptions.push(cloudOutput);
+    cloudOutput.appendLine('[caspian-notes] activate: entry');
+    // eslint-disable-next-line no-console
+    console.log('[caspian-notes] activate: entry');
+
     const store = NoteStore.fromContext(context);
     const tree = new NoteTreeProvider(store);
-    const cloudOutput = vscode.window.createOutputChannel('Caspian Notes (Cloud)');
-    context.subscriptions.push(cloudOutput);
     context.subscriptions.push(vscode.window.registerTreeDataProvider('caspianNotesList', tree));
-
-    // Status-bar item showing the cloud-sync state. Click → quick-pick of
-    // cloud commands.
-    const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
-    status.command = 'caspianNotes.cloudStatus';
-    context.subscriptions.push(status);
-    function refreshStatus(): void {
-        const s = getSyncStatus();
-        if (!s) {
-            status.text = '$(circle-slash) Notes offline';
-            status.tooltip = 'Notes are local-only. Click to connect.';
-        } else if (s.pendingDirty > 0) {
-            status.text = `$(cloud-upload) Notes ${s.pendingDirty} pending`;
-            status.tooltip = `${s.pendingDirty} notes waiting to sync to Caspian Tools`;
-        } else {
-            status.text = '$(cloud) Notes synced';
-            status.tooltip = 'Notes synced with Caspian Tools';
-        }
-        status.show();
-    }
-    refreshStatus();
-    const statusTimer = setInterval(refreshStatus, 5_000);
-    context.subscriptions.push({ dispose: () => clearInterval(statusTimer) });
-
-    // URI handler for the device-pairing callback. The web page dispatches
-    //   vscode://CaspianTools.caspian-notes/pair?session=...&status=ok
-    // after the user picks a workspace; we forward the session id to
-    // pair.ts which is awaiting it.
-    context.subscriptions.push(
-        vscode.window.registerUriHandler({
-            handleUri(uri) {
-                if (uri.path === '/pair') {
-                    const sessionId = new URLSearchParams(uri.query).get('session');
-                    if (sessionId) {
-                        notifyPairingCallback(sessionId);
-                    }
-                }
-            },
-        }),
-    );
-
-    // Auto-start the sync engine if we're already signed in (the user
-    // paired in a previous session). Don't block activation on the
-    // identity probe — let it resolve in the background.
-    void (async () => {
-        try {
-            if (await isCloudSignedIn(context)) {
-                const wsId = getActiveWorkspaceId(context);
-                if (wsId) {
-                    await startSyncEngine(context, store, cloudOutput, wsId);
-                    refreshStatus();
-                }
-            }
-        } catch (err) {
-            cloudOutput.appendLine(`[cloud-sync] auto-start failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    })();
 
     // Refresh the tree when the grouping setting changes.
     context.subscriptions.push(
@@ -117,8 +75,8 @@ export function activate(context: vscode.ExtensionContext): void {
         }),
     );
 
-    // Watch the storage dir so external edits (sync, manual edit, restore from backup)
-    // refresh the UI without requiring a reload.
+    // Watch the storage dir so external edits (sync, manual edit, restore
+    // from backup) refresh the UI without requiring a reload.
     const watcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(vscode.Uri.file(store.dir), '*.md'),
     );
@@ -146,6 +104,20 @@ export function activate(context: vscode.ExtensionContext): void {
     const dispatch = (action: CardAction, id: string | undefined) =>
         performAction(store, action, id, hostPresenter);
 
+    // `refreshStatus` is reassigned later when the status bar item is
+    // created. The cloud commands close over this binding via `let`, so
+    // they call a noop until then — never throw because of a missing fn.
+    let refreshStatus: () => void = () => undefined;
+
+    function setSignedInContext(v: boolean): void {
+        void vscode.commands.executeCommand('setContext', 'caspianNotes.cloud.signedIn', v);
+    }
+    // Default to false so viewsWelcome / view-title menus render the
+    // "Connect" affordances on first activation. The auto-start IIFE
+    // overwrites this once it has probed the secret store.
+    setSignedInContext(false);
+
+    // ── Command registration (must happen first) ──────────────────────────
     context.subscriptions.push(
         vscode.commands.registerCommand('caspianNotes.open', () => {
             NotePanel.createOrShow(context, store);
@@ -193,6 +165,7 @@ export function activate(context: vscode.ExtensionContext): void {
             try {
                 const identity = await connectCloud(context);
                 await startSyncEngine(context, store, cloudOutput, identity.workspaceId);
+                setSignedInContext(true);
                 refreshStatus();
                 const wsLabel = identity.workspaceName ?? identity.workspaceId;
                 await vscode.window.showInformationMessage(
@@ -208,6 +181,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('caspianNotes.disconnect', async () => {
             stopSyncEngine(cloudOutput);
             await signOutCloud(context);
+            setSignedInContext(false);
             refreshStatus();
             await vscode.window.showInformationMessage('Disconnected from Caspian Tools.');
         }),
@@ -254,6 +228,89 @@ export function activate(context: vscode.ExtensionContext): void {
             }
         }),
     );
+    cloudOutput.appendLine('[caspian-notes] activate: commands registered');
+
+    // ── Cloud setup (isolated; failures are logged, never thrown) ─────────
+
+    try {
+        const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+        status.command = 'caspianNotes.cloudStatus';
+        context.subscriptions.push(status);
+        refreshStatus = () => {
+            const s = getSyncStatus();
+            if (!s) {
+                status.text = '$(circle-slash) Notes offline';
+                status.tooltip = 'Notes are local-only. Click to connect.';
+            } else if (s.pendingDirty > 0) {
+                status.text = `$(cloud-upload) Notes ${s.pendingDirty} pending`;
+                status.tooltip = `${s.pendingDirty} notes waiting to sync to Caspian Tools`;
+            } else {
+                status.text = '$(cloud) Notes synced';
+                status.tooltip = 'Notes synced with Caspian Tools';
+            }
+            status.show();
+        };
+        refreshStatus();
+        const statusTimer = setInterval(refreshStatus, 5_000);
+        context.subscriptions.push({ dispose: () => clearInterval(statusTimer) });
+        cloudOutput.appendLine('[caspian-notes] activate: status bar ok');
+    } catch (err) {
+        cloudOutput.appendLine(`[caspian-notes] activate: status bar FAILED — ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+        // eslint-disable-next-line no-console
+        console.error('[caspian-notes] status bar failed:', err);
+    }
+
+    try {
+        // URI handler for the device-pairing callback. The web page dispatches
+        //   vscode://CaspianTools.caspian-notes/pair?session=...&status=ok
+        // after the user picks a workspace; we forward the session id to
+        // pair.ts which is awaiting it.
+        context.subscriptions.push(
+            vscode.window.registerUriHandler({
+                handleUri(uri) {
+                    if (uri.path === '/pair') {
+                        const sessionId = new URLSearchParams(uri.query).get('session');
+                        if (sessionId) {
+                            notifyPairingCallback(sessionId);
+                        }
+                    }
+                },
+            }),
+        );
+        cloudOutput.appendLine('[caspian-notes] activate: URI handler ok');
+    } catch (err) {
+        cloudOutput.appendLine(`[caspian-notes] activate: URI handler FAILED — ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+        // eslint-disable-next-line no-console
+        console.error('[caspian-notes] URI handler failed:', err);
+    }
+
+    // Auto-start the sync engine if we're already signed in (the user paired
+    // in a previous session). Fire-and-forget — don't block activation on
+    // the identity probe.
+    void (async () => {
+        try {
+            const signedIn = await isCloudSignedIn(context);
+            setSignedInContext(signedIn);
+            if (signedIn) {
+                const wsId = getActiveWorkspaceId(context);
+                if (wsId) {
+                    await startSyncEngine(context, store, cloudOutput, wsId);
+                    refreshStatus();
+                    cloudOutput.appendLine(`[caspian-notes] activate: auto-started sync for ws=${wsId}`);
+                } else {
+                    cloudOutput.appendLine('[caspian-notes] activate: signed in but no workspaceId stored');
+                }
+            } else {
+                cloudOutput.appendLine('[caspian-notes] activate: not signed in (no auto-start)');
+            }
+        } catch (err) {
+            cloudOutput.appendLine(`[caspian-notes] activate: auto-start FAILED — ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            // eslint-disable-next-line no-console
+            console.error('[caspian-notes] auto-start failed:', err);
+        }
+    })();
+
+    cloudOutput.appendLine('[caspian-notes] activate: done');
 }
 
 async function exportLibrary(store: NoteStore): Promise<void> {

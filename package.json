@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/Caspian-Explorer/caspian-notes"
   },
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publisher": "CaspianTools",
   "license": "MIT",
   "engines": {
@@ -56,7 +56,13 @@
     "viewsWelcome": [
       {
         "view": "caspianNotesList",
-        "contents": "No notes yet.\n[New note](command:caspianNotes.new)\n[Open full library](command:caspianNotes.open)"
+        "contents": "No notes yet.\n[New note](command:caspianNotes.new)\n[Open full library](command:caspianNotes.open)\n\n[Connect to Caspian Tools](command:caspianNotes.connect)\nSync your notes across machines via caspiantools.com.",
+        "when": "!caspianNotes.cloud.signedIn"
+      },
+      {
+        "view": "caspianNotesList",
+        "contents": "No notes yet.\n[New note](command:caspianNotes.new)\n[Open full library](command:caspianNotes.open)\n\nSynced with Caspian Tools.",
+        "when": "caspianNotes.cloud.signedIn"
       }
     ],
     "commands": [
@@ -133,7 +139,8 @@
       },
       {
         "command": "caspianNotes.connect",
-        "title": "Caspian Notes: Connect to Caspian Tools"
+        "title": "Caspian Notes: Connect to Caspian Tools",
+        "icon": "$(cloud)"
       },
       {
         "command": "caspianNotes.disconnect",
@@ -154,7 +161,8 @@
       },
       {
         "command": "caspianNotes.cloudStatus",
-        "title": "Caspian Notes: Cloud Status…"
+        "title": "Caspian Notes: Cloud Status…",
+        "icon": "$(cloud)"
       }
     ],
     "menus": {
@@ -178,6 +186,16 @@
           "command": "caspianNotes.toggleTreeGrouping",
           "when": "view == caspianNotesList",
           "group": "navigation@4"
+        },
+        {
+          "command": "caspianNotes.connect",
+          "when": "view == caspianNotesList && !caspianNotes.cloud.signedIn",
+          "group": "navigation@5"
+        },
+        {
+          "command": "caspianNotes.cloudStatus",
+          "when": "view == caspianNotesList && caspianNotes.cloud.signedIn",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
