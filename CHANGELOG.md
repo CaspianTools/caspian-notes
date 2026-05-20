@@ -2,6 +2,14 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.2] - 2026-05-20
+
+### Fixed
+- **Activation crashes are now visible.** v1.4.1 wrapped the cloud-specific setup blocks in try/catch but left lines 60–120 of `activate()` (NoteStore construction, tree provider registration, file watcher, etc.) bare. A throw in that range still left the extension half-activated with welcome-panel buttons surfacing "command not found". The entire `activate()` body is now wrapped in an outer try/catch; on failure the user sees a popup ("Caspian Notes failed to activate: …") with a "Show Developer Tools" action that opens the console for the stack trace. Per-step `log()` probes (output channel + `console.log`) emit a line before every synchronous setup step, so the first MISSING line identifies the failing step.
+
+### Changed
+- **Explicit `activationEvents`: `onStartupFinished`, `onUri`.** Declaring this turns OFF the implicit `onCommand:*` derivation and forces activation to happen as soon as the VS Code window finishes loading — no user click required. Logs and any thrown error now appear immediately on startup, which is the only reliable way to diagnose the kind of silent activation failure v1.4.1 was hitting. `onUri` is kept explicitly for the device-pairing callback URI.
+
 ## [1.4.1] - 2026-05-20
 
 ### Fixed

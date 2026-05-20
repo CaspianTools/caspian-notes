@@ -7,12 +7,16 @@
     "type": "git",
     "url": "https://github.com/Caspian-Explorer/caspian-notes"
   },
-  "version": "1.4.1",
+  "version": "1.4.2",
   "publisher": "CaspianTools",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
   "categories": [
     "Other",
     "Snippets"
