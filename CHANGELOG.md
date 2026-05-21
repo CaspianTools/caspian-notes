@@ -2,6 +2,11 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.3] - 2026-05-21
+
+### Fixed
+- **VSIX now bundles `node_modules/`.** v1.4.0 through v1.4.2 were all built with `vsce package --no-dependencies`, which skips both the `npm install --production` step AND bundling `node_modules/`. The installed extension was missing `gray-matter` (a runtime dependency of `noteStore.ts`), so the extension module failed to load at `require()` time with `Cannot find module 'gray-matter'`. VS Code logged an activation error and NO commands registered — which is why every welcome-panel button and view-title-toolbar icon across 1.4.0–1.4.2 produced "command not found". 1.4.3 builds with the default `vsce package` (which runs `npm install --production` and bundles `node_modules/` per the `.vscodeignore`) and is the first actually-functional release of the cloud-sync line. The defensive layers from 1.4.1/1.4.2 (outer try/catch around `activate`, per-step `log()` probes, `onStartupFinished` activation, popup on crash) remain — they were aimed at the wrong problem but are still useful for diagnosing any future activation issues.
+
 ## [1.4.2] - 2026-05-20
 
 ### Fixed
