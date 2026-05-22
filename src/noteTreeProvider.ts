@@ -1,15 +1,44 @@
 import * as vscode from 'vscode';
 import { NoteStore } from './noteStore';
+import { formatRelativeShort } from './timeAgo';
 import { Note } from './types';
+
+// Tiny per-note sync marker appended to the tree-item description.
+// Mirrors the web NoteSyncBadge but with extra (local) state — the
+// extension cares about local-vs-cloud divergence; the web doesn't.
+//
+// Suffix uses unicode glyphs so we don't need extra ThemeIcon overlays:
+//   ⚠ conflict
+//   ⟳ pending push
+//   ✓ synced
+//   (local) never paired
+function syncMarker(note: Note): { suffix: string; tooltipLine: string } {
+    if (note.hasConflict) {
+        return { suffix: ' ⚠', tooltipLine: 'Conflict — needs manual resolution' };
+    }
+    if (note.cloudDirty) {
+        return { suffix: ' ⟳', tooltipLine: 'Pending sync to Caspian Tools' };
+    }
+    if (note.syncedAt) {
+        return { suffix: ' ✓', tooltipLine: `Synced ${formatRelativeShort(note.syncedAt)}` };
+    }
+    if (!note.workspaceId) {
+        return { suffix: ' (local)', tooltipLine: 'Local only — not signed in to Caspian Tools' };
+    }
+    return { suffix: '', tooltipLine: '' };
+}
 
 export class NoteTreeItem extends vscode.TreeItem {
     constructor(public readonly note: Note) {
         super(note.title || 'Untitled', vscode.TreeItemCollapsibleState.None);
-        this.description = note.tags.join(', ');
+        const { suffix, tooltipLine } = syncMarker(note);
+        const tagDesc = note.tags.join(', ');
+        this.description = tagDesc + suffix;
         const tooltip = new vscode.MarkdownString(
             `**${escapeMarkdown(note.title)}**\n\n${escapeMarkdown(
                 note.body.slice(0, 600),
-            )}${note.body.length > 600 ? '…' : ''}`,
+            )}${note.body.length > 600 ? '…' : ''}` +
+                (tooltipLine ? `\n\n_${escapeMarkdown(tooltipLine)}_` : ''),
         );
         tooltip.isTrusted = false;
         tooltip.supportHtml = false;

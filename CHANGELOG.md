@@ -2,6 +2,12 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.4] - 2026-05-21
+
+### Added
+- **Per-note sync marker in the tree description.** Each note in the Caspian Notes view now carries a small unicode marker after its tags: `✓` synced, `⟳` pending push to Caspian Tools, `⚠` conflict, `(local)` never paired. The tooltip on hover gains a one-line description (e.g. "Synced 2m ago"). Logic mirrors the web's NoteSyncBadge but with the extra `(local)` state the extension cares about — the web treats every Firestore note as synced by definition.
+- New tiny `src/timeAgo.ts` helper (`formatRelativeShort`) used by the tooltip. Independent of caspiantools' `lib/utils.ts:formatRelativeDate` so the extension stays self-contained.
+
 ## [1.4.3] - 2026-05-21
 
 ### Fixed

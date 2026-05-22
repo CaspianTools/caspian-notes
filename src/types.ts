@@ -24,6 +24,12 @@ export interface Note {
     // outbound sync tick after Firestore PATCH succeeds.
     cloudDirty?: boolean;
     syncedAt?: string;
+    // Set when an inbound apply detects the cloud-side updatedAt is older
+    // than the local updatedAt — there's a divergence that can't be
+    // resolved without user input. Surfaced by the tree-item ⚠ marker.
+    // (Not currently written by any code path; reserved for a future
+    // three-way conflict detector. Reading it is safe.)
+    hasConflict?: boolean;
     // Writer-tag set by the cloud sync engine — `extension:<uid>:<sessionPrefix>`.
     // Inbound sync uses isOwnWrite() to skip docs that echo this session's
     // own writes. Local-only edits don't write this field.
