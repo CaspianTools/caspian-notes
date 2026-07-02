@@ -6,6 +6,11 @@ media/vendor/
 .DS_Store
 Thumbs.db
 
+# Claude Code isolated worktrees (parallel sessions live under .claude/worktrees/).
+# Their contents must never surface as untracked files in the main checkout.
+# Only this subfolder is ignored — a committed .claude/settings.json stays tracked.
+.claude/worktrees/
+
 # Secrets — defense-in-depth even though this extension stores no credentials
 .env
 .env.*
