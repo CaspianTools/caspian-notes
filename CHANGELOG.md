@@ -2,6 +2,13 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.5] - 2026-07-27
+
+### Fixed
+- **Notes created in VS Code were invisible to every colleague, and updates to shared notes were rejected outright.** `buildNotePayload` sent `memberUids: [uid]` on *every* push. Two consequences, both only visible in a workspace with more than one member:
+  - On a **create**, `memberUids` is the tenancy anchor — the web's per-note read rule checks it and every live query filters on `array-contains uid` — so `[uid]` produced a note only its author could see. The comment here claimed `onWorkspaceMemberChange` would fan the value out to the full member list; it does not. That trigger fires on a workspace-document *update*, so it only re-mirrors when membership actually CHANGES, and a note created wrong in a stable workspace stayed wrong forever. The first push now sends the workspace's real `memberUids`, read from `/workspaces/{wsId}` once per outbound sweep (falling back to `[uid]` if that read fails).
+  - On an **update**, caspiantools.com now pins `memberUids` (`tenancyUnchanged()` in `firestore.rules`), and `setDoc`'s `updateMask` covers every key in the payload — so sending `[uid]` for a note the server had widened to the full workspace failed with `PERMISSION_DENIED`, silently breaking sync for that note. `memberUids` is no longer sent on updates at all; it is server-managed state (EXTENSION-SYNC-CONTRACT §3), and the only reason to send it is to satisfy the create rule. `syncedAt` is the create/update discriminator — it is stamped only after a successful push or an inbound apply, so its absence means "this note does not exist in the cloud yet".
+
 ## [1.4.4] - 2026-05-21
 
 ### Added

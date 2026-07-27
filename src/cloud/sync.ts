@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { NoteStore } from '../noteStore';
 import { Note } from '../types';
 import { getCloudUid, isCloudSignedIn } from './auth';
-import { runQuery, setDoc } from './firestore';
+import { getDoc, runQuery, setDoc } from './firestore';
 import { isOwnWrite, tagWrite } from './writerTag';
 
 // Bidirectional note-sync engine for caspiantools.com.
@@ -175,12 +175,16 @@ async function runOutbound(
         return;
     }
 
+    // Authoritative workspace membership, refreshed once per outbound sweep.
+    // Only used to seed `memberUids` on a FIRST push — see buildNotePayload.
+    const memberUids = await fetchWorkspaceMembers(context, wsId, uid, output);
+
     for (const note of dirty) {
         if (!active || !active.running) { return; }
         try {
             const localId = note.localId ?? note.id;
             const docId = `${wsId}_${localId}`;
-            const payload = buildNotePayload(note, wsId, uid, localId);
+            const payload = buildNotePayload(note, wsId, uid, localId, memberUids);
             const tagged = tagWrite(payload, { uid, sessionPrefix });
             await setDoc(context, `notes/${docId}`, tagged);
             await store.markCloudSynced(note.id, tagged.updatedAt, tagged.updatedBy);
@@ -285,11 +289,47 @@ async function runInbound(
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+/**
+ * The workspace's real member list, for seeding `memberUids` on a first push.
+ *
+ * `memberUids` is the tenancy anchor: the web's per-document read rule checks it
+ * and every live query filters on `array-contains uid`. Seeding it with just
+ * `[uid]` — which this extension used to do — creates a note that is invisible
+ * to every colleague in the workspace, permanently. The comment here used to
+ * claim `onWorkspaceMemberChange` would fan the value out; it does not. That
+ * trigger fires on a workspace-document UPDATE, so it only re-mirrors when
+ * membership actually CHANGES — a note created wrong in a stable workspace
+ * stays wrong forever. Reading the workspace document costs one GET per sweep.
+ *
+ * Falls back to `[uid]` when the read fails, since that is still enough to
+ * satisfy the create rule and the server now normalises the value anyway.
+ */
+async function fetchWorkspaceMembers(
+    context: vscode.ExtensionContext,
+    wsId: string,
+    uid: string,
+    output: vscode.OutputChannel | undefined,
+): Promise<string[]> {
+    try {
+        const ws = await getDoc(context, `workspaces/${wsId}`);
+        const members = ws?.memberUids;
+        if (Array.isArray(members) && members.length > 0) {
+            return members.filter((m): m is string => typeof m === 'string');
+        }
+    } catch (err) {
+        output?.appendLine(
+            `[cloud-sync] could not read workspace members: ${err instanceof Error ? err.message : err}`,
+        );
+    }
+    return [uid];
+}
+
 function buildNotePayload(
     note: Note,
     wsId: string,
     uid: string,
     localId: string,
+    memberUids: string[],
 ): Record<string, unknown> {
     // Shape mirrors the web's Note schema (caspiantools/lib/notes/types.ts).
     // No GitHub fields, no localDirty/githubDirty — those are Tasks-specific.
@@ -301,11 +341,6 @@ function buildNotePayload(
         // Always the Firebase uid — `firestore.rules` for /notes requires
         // `ownerUid == request.auth.uid` on create.
         ownerUid: uid,
-        // memberUids gets fanned out to the workspace's full member list by
-        // the web's onWorkspaceMemberChange trigger; we just seed [uid] on
-        // the first push so the create-time `memberUids array-contains uid`
-        // rule passes.
-        memberUids: [uid],
         title: note.title,
         body: note.body,
         tags: note.tags,
@@ -314,6 +349,18 @@ function buildNotePayload(
         createdAt: note.createdAt,
         cloudDirty: false,
     };
+    // `memberUids` is sent ONLY on a first push, and never on an update.
+    //
+    // The web's create rule requires `request.auth.uid in memberUids`, so a
+    // create cannot omit it. But the update rule pins it (`tenancyUnchanged()`),
+    // and setDoc's updateMask covers every key in this payload — so including it
+    // on an update sends a value the server compares against its own and rejects
+    // with PERMISSION_DENIED the moment the two differ. That is exactly what
+    // happened to every note in a workspace with two or more members.
+    //
+    // `syncedAt` is stamped only after a successful push (or an inbound apply),
+    // so its absence is exactly "this document does not exist in the cloud yet".
+    if (!note.syncedAt) { payload.memberUids = memberUids; }
     if (note.projectId) { payload.projectId = note.projectId; }
     if (note.deleted === true) {
         payload.deleted = true;
