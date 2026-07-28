@@ -2,6 +2,16 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.7] - 2026-07-28
+
+### Security
+- **Patched a high-severity DoS in `js-yaml`, reachable from shipped code.** `gray-matter` — the frontmatter parser behind every `noteStore.ts` read — pinned `js-yaml ^3.13.1` and resolved it to 3.14.2, which is vulnerable to quadratic CPU consumption via repeated YAML merge-key aliases ([GHSA-h67p-54hq-rp68](https://github.com/advisories/GHSA-h67p-54hq-rp68), [GHSA-52cp-r559-cp3m](https://github.com/advisories/GHSA-52cp-r559-cp3m)). This is a **production** dependency: it ships inside the VSIX and runs against the frontmatter of every note the extension parses, so a note file with a crafted merge-key chain could hang the extension host. Fixed with an explicit `overrides` entry pinning `gray-matter > js-yaml` to `^3.15.0` — the patched 3.x line, which satisfies gray-matter's existing range, so nothing else in the tree moves.
+- The fix is deliberately an `overrides` pin rather than a blanket `npm audit fix`: the latter also rewrote ~26 dev-tree packages (`@azure/msal-node`, the `@vscode/vsce` transitives) which CI does not gate on and which would have put the packaging toolchain itself on untested versions. The resulting `package-lock.json` delta is three lines.
+- `npm run audit` (`--audit-level=high --omit=dev`) now reports **0 vulnerabilities**. The dev-only findings remain accepted risk, as documented in the 1.3.4 notes below.
+
+### Fixed
+- **`npm run audit` added to the local pre-flight.** The 1.4.6 release passed lint / compile / test / package locally and still went out with a red `main`, because [`ci.yml`](.github/workflows/ci.yml) runs an audit step that the local checklist did not. `BUILD.md` now lists all five gates in the order CI runs them.
+
 ## [1.4.6] - 2026-07-28
 
 ### Changed

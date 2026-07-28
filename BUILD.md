@@ -49,6 +49,20 @@ npm run audit     # npm audit --audit-level=high --omit=dev
 
 Production dependencies only. Dev-only findings are excluded because they never ship inside the VSIX — see the note at the end of the 1.3.4 entry in [CHANGELOG.md](CHANGELOG.md).
 
+Prefer a targeted `overrides` entry in `package.json` over a blanket `npm audit fix` — see the 1.4.7 entry for why. `npm audit fix` will happily rewrite the dev tree (including the `@vscode/vsce` transitives that build the VSIX) to fix findings CI does not gate on.
+
+## Pre-flight
+
+Run all five, in this order — it is exactly what [`ci.yml`](.github/workflows/ci.yml) runs, so green locally means green on push:
+
+```bash
+npm run lint
+npm run compile
+npm test
+npm run audit
+npx @vscode/vsce package
+```
+
 ## Package
 
 ```bash

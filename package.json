@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/CaspianTools/caspian-notes"
   },
-  "version": "1.4.6",
+  "version": "1.4.7",
   "publisher": "CaspianTools",
   "license": "MIT",
   "engines": {
@@ -344,5 +344,10 @@
     "fuse.js": "^7.3.0",
     "gray-matter": "^4.0.3",
     "marked": "^18.0.2"
+  },
+  "overrides": {
+    "gray-matter": {
+      "js-yaml": "^3.15.0"
+    }
   }
 }

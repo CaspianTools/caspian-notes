@@ -27,6 +27,18 @@ npm run compile
 ```
 Fix all TypeScript compilation errors before proceeding.
 
+### 2a. Test
+```
+npm test
+```
+All vitest suites must pass.
+
+### 2b. Audit
+```
+npm run audit
+```
+Production dependencies only (`--audit-level=high --omit=dev`). **This step is not optional** — `ci.yml` runs it on every push, so skipping it locally means discovering the failure only after `main` has already gone red. Fix findings with a targeted `overrides` entry in `package.json` rather than a blanket `npm audit fix`, which also rewrites dev-tree packages CI does not gate on (including the `@vscode/vsce` transitives that build the VSIX). Dev-only findings are accepted risk — see the 1.3.4 CHANGELOG notes.
+
 ### 3. Review Changed Files
 Review all staged and modified files for:
 - Accidental debug code (`console.log`, `debugger`, leftover `TODO`/`FIXME` comments)
