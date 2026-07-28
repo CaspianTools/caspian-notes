@@ -2,6 +2,15 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.8] - 2026-07-28
+
+### Fixed
+- **Open VSX publication was rejected as containing a secret.** Its scanner flagged `out/cloud/auth.js` under rule `gcp-api-key` (entropy 4.65) on the bundled `AIza…` string. **This is a false positive and nothing was leaked.** The value is the Firebase *Web* API key for the caspian-tools project — a public project identifier, not a credential. It authorizes nothing on its own: possession lets you *address* the project's Identity Toolkit endpoint, while every read and write is gated by Firebase Auth plus the Firestore security rules. The identical string is already served to every visitor of caspiantools.com as `NEXT_PUBLIC_FIREBASE_API_KEY`, declared there under "Public values (safe to ship to the browser)". **No rotation was performed or needed** — rotating a public web key would break every client for no security gain. Resolved with the `// secret-detector:ignore` marker that Open VSX documents for exactly this case, placed on the flagged line in `src/cloud/auth.ts` (`tsc` preserves comments, so it reaches `out/`). The marker is accompanied by a comment explaining why it is legitimate here and warning against reusing it on anything that is actually secret — the extension's real credentials (refresh token, uid) live in `vscode.SecretStorage` and never touch source.
+
+### Added
+- **`THREAT_MODEL.md` §G — the cloud-sync boundary.** The threat model had not been revised since 1.3.4 and so described a purely local extension: it documented no Firebase trust boundary, did not list the refresh token as an asset, and still claimed "No sync" as a residual risk — all of which stopped being true in 1.4.0. §G now covers the bundled public key, theft and replay of the stored refresh token, forged `vscode://` pairing callbacks, and sync-loop prevention via the writer tag, plus the residual risk that paired notes leave the device. Trust boundary 4 and two new assets were added, and the stale "No sync" bullet corrected to "No implicit sync".
+- **Hardening note:** §G records that the API key should be restricted to the Identity Toolkit and Token Service APIs in the Google Cloud Console. That is a console-side change outside this repo — an unrestricted key is still not a credential, but it could be pointed at other billable APIs enabled on the project.
+
 ## [1.4.7] - 2026-07-28
 
 ### Security

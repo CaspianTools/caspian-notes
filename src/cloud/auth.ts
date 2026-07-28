@@ -30,7 +30,22 @@ import { pairWithCaspianTools, type PairingResult } from './pair';
 // custom-token flow, just separate stored workspace pick + refresh
 // token.
 
-const FIREBASE_API_KEY = 'AIzaSyB8si3k4aqDGupwiquk13krhBQUlfhwep8';
+// Firebase *Web* API key for the caspian-tools project. This is a public
+// project identifier, not a credential — it authorizes nothing by itself.
+// The same value is already served to every visitor of caspiantools.com as
+// NEXT_PUBLIC_FIREBASE_API_KEY (see that repo's apphosting.yaml, under
+// "Public values (safe to ship to the browser)"). Possession grants only the
+// ability to *address* this project's Identity Toolkit endpoint; who may read
+// or write what is decided by Firebase Auth plus the Firestore security rules.
+// See THREAT_MODEL.md §G.
+//
+// Open VSX's publish scanner matches this on shape alone (rule `gcp-api-key`)
+// and rejects the upload, so the line carries a suppression marker. That
+// marker is ONLY appropriate because this value is genuinely public — never
+// add it to something that is actually secret. Real credentials in this
+// extension (the refresh token, the uid) live in vscode.SecretStorage and are
+// never written to source.
+const FIREBASE_API_KEY = 'AIzaSyB8si3k4aqDGupwiquk13krhBQUlfhwep8'; // secret-detector:ignore
 const SIGN_IN_URL =
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${FIREBASE_API_KEY}`;
 const REFRESH_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
