@@ -96,17 +96,13 @@ After every commit, create a GitHub Discussion in the **Announcements** category
 
 **Create via GraphQL API:**
 
-> **Repository ID is filled.** The Announcements category ID still needs to be fetched once Discussions are enabled on the repo:
->
-> 1. On https://github.com/Caspian-Explorer/caspian-notes — Settings → General → Features → check **Discussions**.
-> 2. Create an "Announcements" category in the Discussions tab.
-> 3. Run the query below, copy the Announcements `id`, and paste into the mutation.
+> **Repository ID and Announcements category ID are filled in below.** Discussions are enabled on `CaspianTools/caspian-notes` and the Announcements category ID is `DIC_kwDOSLnYT84C7q_V`. The lookup query is preserved below for re-discovery if categories are ever rotated.
 
 ```bash
 # Fetch the Announcements category ID (run once after enabling Discussions):
 gh api graphql -f query='
   query {
-    repository(owner: "Caspian-Explorer", name: "caspian-notes") {
+    repository(owner: "CaspianTools", name: "caspian-notes") {
       id
       discussionCategories(first: 10) { nodes { id name } }
     }
@@ -117,7 +113,7 @@ gh api graphql -f query='
   mutation {
     createDiscussion(input: {
       repositoryId: "R_kgDOSLnYTw",
-      categoryId: "<ANNOUNCEMENTS_CATEGORY_ID_TODO>",
+      categoryId: "DIC_kwDOSLnYT84C7q_V",
       title: "<TITLE>",
       body: "<BODY>"
     }) {
@@ -126,3 +122,18 @@ gh api graphql -f query='
   }
 '
 ```
+
+## Worktrees & the ship rule
+
+Claude Code can run parallel sessions in isolated **git worktrees** (`claude --worktree <name>`, or ask it to "work in a worktree" → the `EnterWorktree` tool). A worktree lives under `.claude/worktrees/<name>/` on branch `worktree-<name>`, branched **fresh from `origin/main`** by default (set `worktree.baseRef: "head"` in `.claude/settings.json` to carry local HEAD instead). `.claude/worktrees/` is gitignored and **`.worktreeinclude`** copies any local secrets into new worktrees — see those two files. `node_modules` and build artifacts are *not* copied: run `npm install` then `npm run compile` in each new worktree.
+
+**How this repo ships:** there is **no auto-deploy on push to `main`** — [`ci.yml`](.github/workflows/ci.yml) runs only lint / compile / test / audit on push and PRs. The actual release fires from [`release.yml`](.github/workflows/release.yml) on a **git tag push** (`v*`): it packages the `.vsix` and creates a GitHub Release, and (when `VSCE_PAT` / `OVSX_PAT` are wired) publishes to the VS Code Marketplace / Open VSX. So the shippable moment is **tag + push tag**, not a branch push. A worktree sits on `worktree-<name>`, so a "commit + push" *inside* a worktree pushes a feature branch — it runs CI but ships nothing. The standing post-task flow (see the Pre-Commit Checklist: bump → package → commit → tag → push → release → discussion) **adapts inside a worktree** — do NOT blindly tag/push a release from one:
+
+1. **Commit, pause before landing.** Auto-commit finished work on the `worktree-<name>` branch, then **stop and report**. Never merge to `main`, and never create/push the `vX.Y.Z` tag (the step that releases/publishes), without the owner's explicit go-ahead. *(On `main` — the normal solo flow — the Pre-Commit Checklist is unchanged: bump, package, commit, tag, push, release, discussion.)*
+2. **Serialize landings — one at a time.** Never land two worktrees to `main` in parallel. If another worktree/session is still in flight, wait for it to land first. "Wait" means: at land time `git fetch` and rebase onto whatever `origin/main` now is; if the owner says another is mid-flight, hold until told it's done.
+3. **Resolve conflicts in the worktree, never on `main`.** At land time: `git fetch origin` → **rebase `worktree-<name>` onto the latest `origin/main`** → resolve every conflict *there*, so `main` only ever receives an already-merged, clean tree.
+4. **Finalize the version bump last.** The version — `package.json` `version`, the `CHANGELOG.md` `## [X.Y.Z]` heading, and `package-lock.json` (via `npm install`) — plus the eventual `vX.Y.Z` tag is the *guaranteed* collision between two shippable worktrees. Don't fix the number until after the rebase — take *current-main + 1*, then update those files and any affected docs (README / ARCHITECTURE / BUILD / SETUP_GUIDE / QUICKSTART / START_HERE / THREAT_MODEL).
+5. **Re-verify + rebuild after resolving.** Re-run the Pre-Commit Checklist gates against the rebased tree — `npm run lint`, `npm run compile`, `npm test` (vitest), then `npx @vscode/vsce package` to confirm the `.vsix` still builds cleanly. A conflict resolution that isn't re-verified is a bug waiting to ship.
+6. **Only then ship.** Fast-forward `main` to the clean, verified branch → `git push origin main` (CI runs) → then create the annotated tag `git tag -a vX.Y.Z` and `git push origin main --tags` to trigger the Release workflow → finish with the GitHub Release + Announcements discussion chores. **Never tag/push a conflicted or failing tree.**
+
+For solo, single-stream work that ships immediately, **skip worktrees and work on `main` directly** — the Pre-Commit Checklist needs no adaptation. Reserve worktrees for genuine parallelism (two tasks at once) or experiments you may not ship.

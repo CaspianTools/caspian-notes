@@ -1,0 +1,26 @@
+# .worktreeinclude — gitignored files copied into each new Claude Code worktree.
+#
+# Uses .gitignore syntax. A file is copied only when it BOTH matches a pattern
+# here AND is gitignored AND actually exists — tracked files are never
+# duplicated, and missing files are silently skipped (so unused patterns no-op).
+# Docs: https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees
+#
+# Caspian Notes is a VS Code extension that stores no credentials, so there are
+# usually no local secrets to carry into a worktree. The patterns below mirror
+# the secret conventions in .gitignore: if such a file ever exists locally, new
+# worktrees inherit it automatically; until then these lines do nothing.
+#
+# NOT copied on purpose: node_modules/ and build artifacts (out/, media/vendor/,
+# *.vsix) — they are regenerated per worktree. Run `npm install` then
+# `npm run compile` in each new worktree.
+
+# Local environment files
+.env
+.env.local
+.env.*
+
+# Credentials / keys (mirrors the .gitignore "Secrets" block)
+credentials.json
+serviceAccountKey*.json
+*.pem
+*.key

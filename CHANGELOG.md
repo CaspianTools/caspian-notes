@@ -52,6 +52,11 @@ All notable changes to **Caspian Notes** will be documented in this file. Format
 - **Note frontmatter gains optional fields**: `localId`, `workspaceId`, `projectId`, `cloudDirty`, `syncedAt`, `updatedBy`, `deleted`, `deletedAt`. Legacy notes still parse fine — `localId` is back-filled from the file's UUID stem on first read so the cloud doc id (`${workspaceId}_${localId}`) is stable from either side.
 - **`update()` accepts `projectId: string | null`** to set or clear the field; `delete()` writes a tombstone via the new flow described above; new internal helpers `getDirtyNotes()` / `upsertFromCloud()` / `markCloudSynced()` / `markAllDirty()` / `getSessionPrefix()` mirror the IssueStore API the sync engine expects.
 
+## [1.3.6] - 2026-05-07
+
+### Changed
+- **Maintenance release — no functional changes.** Repackaged the VSIX from a freshly installed dependency tree to refresh the published artifact. Source, configuration, and bundled assets are identical to 1.3.5.
+
 ## [1.3.5] - 2026-04-25
 
 ### Added
