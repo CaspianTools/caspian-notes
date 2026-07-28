@@ -2,6 +2,19 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.6] - 2026-07-28
+
+### Changed
+- **Reconciled the two divergent `main` lines.** The local branch had carried the entire unreleased 1.4.x cloud-sync line (1.4.0 → 1.4.5, six commits) while `origin/main` had moved on independently with three commits of its own: the 1.3.6 maintenance republish, the filled-in Announcements category ID in `CLAUDE.md`, and the Claude Code worktree setup. Neither side had ever seen the other. No source file conflicted — the collision was confined to the version marker in `package.json` and the position of the 1.3.6 entry in this file, which now sits in its correct chronological slot between 1.4.0 and 1.3.5. **1.4.0 through 1.4.5 were never tagged or released**, so this is the first public release of the whole cloud-sync line; the release notes for those versions are the entries below.
+- **`package-lock.json` re-synced.** It had been stuck at 1.3.5 since before 1.4.0 — the `npm install` step of the version bump was skipped for all six 1.4.x commits, so the lock never recorded any of them. Because the local side had left those lines untouched, git saw no conflict during the merge and silently resolved the lock to origin's 1.3.6 while `package.json` said 1.4.5. Regenerated at 1.4.6, and the two are consistent again.
+- **Repository URLs corrected from `Caspian-Explorer` to `CaspianTools`.** The org rename had only been applied inside `CLAUDE.md`; the CI badge in `README.md`, the clone commands in `BUILD.md` / `QUICKSTART.md`, the advisory link in `SECURITY.md`, and `repository.url` in `package.json` all still pointed at the old owner. GitHub was redirecting them, so nothing was broken — they are simply correct now. The `LICENSE` copyright holder is unchanged (it names a person, not a URL).
+
+### Added
+- **Claude Code worktree isolation** (arriving via the merge). `.worktreeinclude` declares which gitignored files get copied into each new worktree, `.gitignore` now excludes `.claude/worktrees/` so parallel sessions never surface as untracked files in the main checkout, and `CLAUDE.md` gains a "Worktrees & the ship rule" section documenting how the release flow adapts inside a worktree (commit on the feature branch, land serially, rebase-and-resolve in the worktree, never tag from one without an explicit go-ahead).
+
+### Fixed
+- **`BUILD.md` project structure was three minor versions stale.** The tree still described the pre-1.4.0 layout — no `src/cloud/`, no test files, no `scripts/`. It now reflects the real source tree, and the Test / Audit npm scripts (`npm test` via vitest, `npm run audit`) are documented alongside Lint instead of being discoverable only from `package.json`.
+
 ## [1.4.5] - 2026-07-27
 
 ### Fixed

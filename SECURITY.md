@@ -4,7 +4,7 @@
 
 Please report suspected vulnerabilities privately, not via public issues.
 
-1. **Preferred:** use [GitHub Private Vulnerability Reporting](https://github.com/Caspian-Explorer/caspian-notes/security/advisories/new).
+1. **Preferred:** use [GitHub Private Vulnerability Reporting](https://github.com/CaspianTools/caspian-notes/security/advisories/new).
 2. **Email fallback:** `fuad.jalilov@gmail.com` with subject prefix `[caspian-notes security]`.
 
 Please include:

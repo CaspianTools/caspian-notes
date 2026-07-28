@@ -3,7 +3,7 @@
 ## 5-minute setup
 
 ```bash
-git clone https://github.com/Caspian-Explorer/caspian-notes.git
+git clone https://github.com/CaspianTools/caspian-notes.git
 cd caspian-notes
 npm install
 npm run compile

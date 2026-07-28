@@ -8,7 +8,7 @@ A personal notes library for VS Code. Store notes as Markdown files, browse them
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/CaspianTools.caspian-notes.svg)](https://marketplace.visualstudio.com/items?itemName=CaspianTools.caspian-notes)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/CaspianTools.caspian-notes.svg)](https://marketplace.visualstudio.com/items?itemName=CaspianTools.caspian-notes)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/Caspian-Explorer/caspian-notes/actions/workflows/ci.yml/badge.svg)](https://github.com/Caspian-Explorer/caspian-notes/actions/workflows/ci.yml)
+[![CI](https://github.com/CaspianTools/caspian-notes/actions/workflows/ci.yml/badge.svg)](https://github.com/CaspianTools/caspian-notes/actions/workflows/ci.yml)
 
 ## Features
 
