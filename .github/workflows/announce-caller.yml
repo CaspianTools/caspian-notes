@@ -1,0 +1,18 @@
+# Posts this repo's announcements/ files as GitHub Discussions in THIS repo's
+# Announcements category, via the shared reusable workflow in
+# CaspianTools/caspiantools. caspiantools.com reads each product's own repo.
+# Same-repo post, so the built-in GITHUB_TOKEN is enough.
+name: Announce
+on:
+  push:
+    branches: [main]
+    paths: ['announcements/**', '!announcements/_*']
+  workflow_dispatch:
+jobs:
+  announce:
+    uses: CaspianTools/caspiantools/.github/workflows/announce.yml@main
+    with:
+      project: Caspian-Notes
+    permissions:
+      contents: read
+      discussions: write

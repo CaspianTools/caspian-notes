@@ -149,3 +149,13 @@ Claude Code can run parallel sessions in isolated **git worktrees** (`claude --w
 6. **Only then ship.** Fast-forward `main` to the clean, verified branch → `git push origin main` (CI runs) → then create the annotated tag `git tag -a vX.Y.Z` and `git push origin main --tags` to trigger the Release workflow → finish with the GitHub Release + Announcements discussion chores. **Never tag/push a conflicted or failing tree.**
 
 For solo, single-stream work that ships immediately, **skip worktrees and work on `main` directly** — the Pre-Commit Checklist needs no adaptation. Reserve worktrees for genuine parallelism (two tasks at once) or experiments you may not ship.
+
+## Announcements
+
+For any user-visible change (a new feature, a fix users would notice, a release, or a notice), add `announcements/YYYY-MM-DD-<slug>.md` in the **same PR as the change** — copy [announcements/_TEMPLATE.md](announcements/_TEMPLATE.md). When it merges, [.github/workflows/announce-caller.yml](.github/workflows/announce-caller.yml) posts it as a GitHub Discussion in **this repo's** `Announcements` category, which is what this product's page on caspiantools.com shows.
+
+- Never try to create the Discussion yourself; the workflow is the only poster. It skips duplicates, so a manual re-run is safe.
+- Frontmatter: `title` (user-facing headline), `type` (`feature | fix | release | notice`), `social` (`false` = site only, no social media), `draft` (`true` = commit without posting).
+- Body: two to five plain sentences for users, not developers — what changed, why it matters, where to find it.
+- Skip for internal-only, refactor, typo or formatting changes.
+- Never edit or rename a file that has already been posted (a renamed file posts again).
