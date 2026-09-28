@@ -1,7 +1,10 @@
 # Posts this repo's announcements/ files as GitHub Discussions in THIS repo's
-# Announcements category, via the shared reusable workflow in
-# CaspianTools/caspiantools. caspiantools.com reads each product's own repo.
-# Same-repo post, so the built-in GITHUB_TOKEN is enough.
+# Announcements category, which is what this product's page on caspiantools.com reads.
+#
+# Self-contained copy of CaspianTools/caspiantools/.github/workflows/announce.yml.
+# A PUBLIC repo cannot call a reusable workflow in the private caspiantools repo
+# (GitHub allows that only from private repos under a personal account), so the
+# logic is inlined here. Keep it in sync with that file when it changes.
 name: Announce
 on:
   push:
@@ -9,10 +12,123 @@ on:
     paths: ['announcements/**', '!announcements/_*']
   workflow_dispatch:
 jobs:
-  announce:
-    uses: CaspianTools/caspiantools/.github/workflows/announce.yml@main
-    with:
-      project: Caspian-Notes
+  post:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       discussions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect announcement files
+        id: files
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            FILES=$(ls announcements/*.md 2>/dev/null || true)
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            FILES=$(git diff-tree --no-commit-id --name-only --diff-filter=A -r HEAD -- announcements/ || true)
+          else
+            FILES=$(git diff --name-only --diff-filter=A "$BEFORE" HEAD -- announcements/ || true)
+          fi
+          FILES=$(echo "$FILES" | grep -E '\.md$' | grep -vE '(^|/)_' || true)
+          echo "Found:"; echo "$FILES"
+          {
+            echo "list<<EOF"
+            echo "$FILES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post to Discussions
+        if: steps.files.outputs.list != ''
+        uses: actions/github-script@v7
+        env:
+          FILES: ${{ steps.files.outputs.list }}
+          PROJECT: Caspian-Notes
+          TARGET: ${{ github.repository }}
+          CATEGORY: Announcements
+          DRY_RUN: 'false'
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const files = process.env.FILES.split('\n').map(s => s.trim()).filter(Boolean);
+            const [owner, name] = process.env.TARGET.split('/');
+            const source = `${context.repo.owner}/${context.repo.repo}`;
+            const dryRun = process.env.DRY_RUN === 'true';
+
+            function parse(text) {
+              const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+              if (!m) throw new Error('missing frontmatter');
+              const meta = {};
+              for (const line of m[1].split(/\r?\n/)) {
+                const mm = line.match(/^([A-Za-z_]+):\s*(.*?)\s*(\s#.*)?$/);
+                if (mm) meta[mm[1]] = mm[2].replace(/^["']|["']$/g, '');
+              }
+              return { meta, body: m[2].trim() };
+            }
+
+            const repoData = await github.graphql(`
+              query($owner:String!, $name:String!) {
+                repository(owner:$owner, name:$name) {
+                  id
+                  discussionCategories(first:50) { nodes { id name } }
+                }
+              }`, { owner, name });
+            const repoId = repoData.repository.id;
+            const cat = repoData.repository.discussionCategories.nodes
+              .find(c => c.name.toLowerCase() === process.env.CATEGORY.toLowerCase());
+            if (!cat) { core.setFailed(`Category "${process.env.CATEGORY}" not found in ${process.env.TARGET}`); return; }
+
+            const recent = await github.graphql(`
+              query($owner:String!, $name:String!, $cat:ID!) {
+                repository(owner:$owner, name:$name) {
+                  discussions(first:100, categoryId:$cat, orderBy:{field:CREATED_AT, direction:DESC}) {
+                    nodes { body }
+                  }
+                }
+              }`, { owner, name, cat: cat.id });
+            const existingBodies = recent.repository.discussions.nodes.map(n => n.body || '');
+
+            let failures = 0;
+            for (const file of files) {
+              try {
+                const { meta, body } = parse(fs.readFileSync(file, 'utf8'));
+                if (String(meta.draft).toLowerCase() === 'true') { core.info(`Skip draft: ${file}`); continue; }
+                if (!meta.title) throw new Error('missing title');
+                if (!body) throw new Error('empty body');
+
+                const marker = `<!-- announcement-id: ${source}/${file} -->`;
+                if (existingBodies.some(b => b.includes(marker))) { core.info(`Already posted: ${file}`); continue; }
+
+                const project = meta.project || process.env.PROJECT;
+                const title = `[${project}] ${meta.title}`;
+                const type = meta.type || 'notice';
+                const social = String(meta.social ?? 'true').toLowerCase() !== 'false';
+                const footer = [
+                  '',
+                  `<!-- announcement-meta: project=${project}; type=${type}; social=${social} -->`,
+                  marker,
+                ].join('\n');
+
+                if (dryRun) { core.info(`DRY RUN would post to ${process.env.TARGET}: ${title}`); continue; }
+
+                const res = await github.graphql(`
+                  mutation($repo:ID!, $cat:ID!, $title:String!, $body:String!) {
+                    createDiscussion(input:{repositoryId:$repo, categoryId:$cat, title:$title, body:$body}) {
+                      discussion { url }
+                    }
+                  }`, { repo: repoId, cat: cat.id, title, body: body + '\n' + footer });
+                existingBodies.push(marker);
+                core.info(`Posted: ${res.createDiscussion.discussion.url}`);
+              } catch (e) {
+                failures++;
+                core.error(`${file}: ${e.message}`);
+              }
+            }
+            if (failures) core.setFailed(`${failures} announcement(s) failed`);
