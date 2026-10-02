@@ -133,7 +133,7 @@ git add caspian-notes/release-notes
 git commit -m "Add caspian-notes X.Y.Z release note"
 git push origin main
 ```
-Tell the user the note's URL: `https://github.com/CaspianTools/Public-Assets/blob/main/caspian-notes/release-notes/<major>.<minor>/<X.Y.Z>.md` (or the `updates/` path). It appears on https://caspiantools.com/projects/caspian-notes and in https://caspiantools.com/feeds/caspian-notes.xml within minutes.
+Tell the user the note's URL: `https://github.com/CaspianTools/Public-Assets/blob/main/caspian-notes/release-notes/<major>.<minor>/<X.Y.Z>.md` (or the `updates/` path). It appears on https://caspiantools.com/projects/caspian-notes and in https://caspiantools.com/feeds/caspian-notes.xml after the next daily site rebuild (05:00 UTC).
 
 **Never rename or move a published file.** Its path is its permanent ID in the feeds, so a renamed file shows up as a new post.
 
