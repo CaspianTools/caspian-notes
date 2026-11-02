@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/CaspianTools/caspian-notes"
   },
-  "version": "1.4.8",
+  "version": "1.4.9",
   "publisher": "CaspianTools",
   "license": "MIT",
   "engines": {
@@ -311,7 +311,10 @@
         },
         "caspianNotes.treeGrouping": {
           "type": "string",
-          "enum": ["flat", "byTag"],
+          "enum": [
+            "flat",
+            "byTag"
+          ],
           "default": "flat",
           "description": "How the sidebar tree is organized. 'flat' shows every note as a top-level item; 'byTag' groups notes under their tags (with an 'Untagged' bucket)."
         }

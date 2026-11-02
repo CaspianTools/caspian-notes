@@ -194,3 +194,14 @@ export async function setDoc(
         throw new Error(`Firestore PATCH ${path} failed (${res.status}). ${text}`.trim());
     }
 }
+
+/**
+ * True when Firestore refused the request outright (HTTP 403 /
+ * PERMISSION_DENIED). Since caspiantools.com 2026-11 the pairing token is
+ * scoped to the paired workspace and expires 180 days after pairing, so a
+ * 403 on the sync loops means "re-pair", not "retry".
+ */
+export function isPermissionDenied(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /\(403\)/.test(msg) || msg.includes('PERMISSION_DENIED');
+}

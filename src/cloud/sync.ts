@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { NoteStore } from '../noteStore';
 import { Note } from '../types';
 import { getCloudUid, isCloudSignedIn } from './auth';
-import { getDoc, runQuery, setDoc } from './firestore';
+import { getDoc, isPermissionDenied, runQuery, setDoc } from './firestore';
 import { isOwnWrite, tagWrite } from './writerTag';
 
 // Bidirectional note-sync engine for caspiantools.com.
@@ -51,6 +51,41 @@ interface InternalState extends SyncStatus {
     controller: AbortController;
     outboundTimer: NodeJS.Timeout | null;
     inboundTimer: NodeJS.Timeout | null;
+    // Consecutive PERMISSION_DENIED results across both loops. Two in a row
+    // means the pairing token no longer opens this workspace (expired after
+    // 180 days, or the workspace changed) — see noteDenied().
+    deniedStreak: number;
+}
+
+// Pairing-lost handling (caspiantools.com scopes and expires the pairing
+// token since 2026-11, EXTENSION-SYNC-CONTRACT "Token scope and lifetime").
+// Retrying every 15 s against a refused token only fills the log, so the
+// engine stops itself and asks the user to reconnect, once per session.
+const PAIRING_LOST_MESSAGE =
+    'caspiantools.com no longer accepts this VS Code connection — the pairing has expired ' +
+    '(they last 180 days) or the workspace changed. Reconnect to resume syncing.';
+let pairingLostNotified = false;
+
+function noteDenied(err: unknown, output?: vscode.OutputChannel): boolean {
+    if (!active) { return false; }
+    if (!isPermissionDenied(err)) {
+        active.deniedStreak = 0;
+        return false;
+    }
+    active.deniedStreak += 1;
+    if (active.deniedStreak < 2) { return false; }
+    active.lastError = PAIRING_LOST_MESSAGE;
+    output?.appendLine('[cloud-sync] permission denied twice in a row — stopping; re-pair required');
+    stopActive(output);
+    if (!pairingLostNotified) {
+        pairingLostNotified = true;
+        void vscode.window.showWarningMessage(PAIRING_LOST_MESSAGE, 'Reconnect').then((choice) => {
+            if (choice === 'Reconnect') {
+                void vscode.commands.executeCommand('caspianNotes.connect');
+            }
+        });
+    }
+    return true;
 }
 
 let active: InternalState | null = null;
@@ -88,8 +123,10 @@ export async function startSyncEngine(
         lastInboundAt: null,
         pendingDirty: 0,
         lastError: null,
+        deniedStreak: 0,
     };
     active = state;
+    pairingLostNotified = false;
 
     output?.appendLine(`[cloud-sync] start uid=${uid} ws=${workspaceId} session=${sessionPrefix}`);
 
@@ -188,10 +225,12 @@ async function runOutbound(
             const tagged = tagWrite(payload, { uid, sessionPrefix });
             await setDoc(context, `notes/${docId}`, tagged);
             await store.markCloudSynced(note.id, tagged.updatedAt, tagged.updatedBy);
+            active.deniedStreak = 0;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            active.lastError = `outbound ${note.id}: ${msg}`;
             output?.appendLine(`[cloud-sync] outbound ${note.id} failed: ${msg}`);
+            if (noteDenied(err, output)) { return; }
+            active.lastError = `outbound ${note.id}: ${msg}`;
             // Don't tear down on a single failure; sweeper retries next tick.
             break;
         }
@@ -280,10 +319,12 @@ async function runInbound(
             await context.globalState.update(cursorKey, newestSeen);
         }
         active.lastInboundAt = new Date().toISOString();
+        active.deniedStreak = 0;
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        active.lastError = `inbound: ${msg}`;
         output?.appendLine(`[cloud-sync] inbound failed: ${msg}`);
+        if (noteDenied(err, output)) { return; }
+        active.lastError = `inbound: ${msg}`;
     }
 }
 

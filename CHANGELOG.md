@@ -2,6 +2,14 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.9] - 2026-11-02
+
+### Changed
+- **Sync stops and asks you to reconnect when caspiantools.com refuses the pairing, instead of retrying forever.** caspiantools.com now scopes the VS Code pairing token to the workspace you picked and expires it 180 days after pairing (pairings made before this change keep working until 2027-02-01, then need a reconnect too). Before, an expired or out-of-scope pairing made both sync loops fail every 15 seconds in the log with no visible sign. Now two consecutive `PERMISSION_DENIED` results stop the engine, set the last error to a plain explanation, and show one notification with a **Reconnect** button that runs *Caspian Notes: Connect*. `src/cloud/firestore.ts` gains `isPermissionDenied()`; `src/cloud/sync.ts` tracks the streak and resets it on every successful loop. `THREAT_MODEL.md` §G records the narrower blast radius of a stolen refresh token.
+
+### Security
+- **`js-yaml` 3.15.1 → 3.15.2** under `gray-matter` (production dependency), clearing GHSA-5p4m-2wfm-xmqj / GHSA-2883-xcg3-v3hh (quadratic CPU on crafted YAML). The existing `overrides` pin (`^3.15.0`) already allowed it; only the lockfile moved. `npm run audit` is clean again.
+
 ## [1.4.8] - 2026-07-28
 
 ### Fixed
