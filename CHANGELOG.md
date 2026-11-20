@@ -2,6 +2,11 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.10] - 2026-11-20
+
+### Changed
+- **Owner actions are GitHub issues in the standard layout, each linking the session that asked** (owner, 20 Nov 2026). Developer instructions only; no change to the extension.
+
 ## [1.4.9] - 2026-11-02
 
 ### Changed
